@@ -69,14 +69,14 @@ let
       git config --global user.email "you@example.com"
       git config --global user.name "Your Name"
       git commit -m "init"
-      if [[ ${toString (compare install_stages [ "manual" ])} -eq 0 ]]
-      then
-        echo "Running: $ pre-commit run --hook-stage manual --all-files"
-        ${cfg.package}/bin/pre-commit run --hook-stage manual --all-files
-      else
-        echo "Running: $ pre-commit run --all-files"
-        ${cfg.package}/bin/pre-commit run --all-files
-      fi
+      local check_stage=${toString cfg.check_stage}
+      case $check_stage in
+        commit | merge-commit | push)
+          check_stage="pre-"$check_stage
+          ;;
+      esac
+      echo "Running: $ pre-commit run --hook-stage $check_stage --all-files"
+      ${cfg.package}/bin/pre-commit run --hook-stage $check_stage --all-files
       exitcode=$?
       git --no-pager diff --color
       touch $out
@@ -261,6 +261,16 @@ in
               See [https://pre-commit.com/#confining-hooks-to-run-at-certain-stages](https://pre-commit.com/#confining-hooks-to-run-at-certain-stages).
             '';
           default = [ "commit" ];
+        };
+
+      check_stage =
+        mkOption {
+          type = types.str;
+          description = lib.mdDoc
+            ''
+              This is pre-commit stage to be used in a nix `checkPhase`. `commit` maps to `pre-commit`, which is `pre-commit`'s default.
+            '';
+          default = "commit";
         };
 
       rawConfig =
