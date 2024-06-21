@@ -1471,7 +1471,7 @@ in
             configuration =
               mkOption {
                 type = types.str;
-                description = lib.mdDoc "Multiline-string configuration passed as config file. If set, config set in `typos.settings.configPath` gets ignored.";
+                description = lib.mdDoc "Multiline-string configuration passed as config file. It is recommended to use `configPath` instead for a more natural experience of typos.";
                 default = "";
                 example = ''
                   [files]
@@ -1485,11 +1485,14 @@ in
                 '';
               };
 
+            # It is recommended to use a Nix path here as this way, the excludes
+            # from the config file can be taken into account by pre-commit when
+            # running `$ pre-commit run --all-files`.
             configPath =
               mkOption {
-                type = types.str;
-                description = lib.mdDoc "Path to a custom config file.";
-                default = "";
+                type = types.nullOr (types.either types.str types.path);
+                description = lib.mdDoc "[Path](https://nixos.org/manual/nix/stable/language/values#type-path) to a typos config file (recommended) or a string (deprecated)";
+                default = null;
                 example = ".typos.toml";
               };
 
@@ -1506,6 +1509,15 @@ in
                 description = lib.mdDoc "Ignore files and directories matching the glob.";
                 default = "";
                 example = "*.nix";
+              };
+
+            force-exclude =
+              mkOption {
+                type = types.bool;
+                description = lib.mdDoc "Respect excluded files from config file even for paths passed explicitly";
+                # This must be true as this is the natural behaviour. Similar to when executing `typos`
+                # from the cmdline.
+                default = true;
               };
 
             format =
@@ -3398,6 +3410,47 @@ lib.escapeShellArgs (lib.concatMap (ext: [ "--ghc-opt" "-X${ext}" ]) hooks.ormol
           entry = "${hooks.treefmt.package}/bin/treefmt --fail-on-change";
         };
       typos =
+        let
+          # Path to config file. May be in Nix store but can also be a relative
+          # path to a system-dependent file.
+          #
+          # After various upstream discussions [0]), the best solution is to
+          # provide the config file as Nix path but keep the string passing
+          # as fall-back.
+          #
+          # [0]: https://github.com/cachix/pre-commit-hooks.nix/pull/387#issuecomment-1893600631
+          pathToConfigFile =
+            if hooks.typos.settings.configPath != null
+            # Important: If passed as typeOf == "path", this is in Nix store
+            # which we in fact encourage.
+            then hooks.typos.settings.configPath
+            else
+              builtins.toFile "config.toml"
+                # Concatenate config in config file with section for ignoring words
+                # generated from list of words to ignore
+                (hooks.typos.settings.configuration +
+                  lib.strings.optionalString (hooks.typos.settings.ignored-words != [ ]) "\n\[default.extend-words\]" +
+                  lib.strings.concatMapStrings (x: "\n${x} = \"${x}\"") hooks.typos.settings.ignored-words
+                )
+          ;
+          # If the config file path is passed as string and not as path, we
+          # can't read it from Nix.
+          excludesFromConfig =
+            if builtins.typeOf hooks.typos.settings.configPath == "path" # passed directly or as Path
+            then
+              (
+                let
+                  toml = builtins.fromTOML (builtins.readFile pathToConfigFile);
+                in
+                  /*
+                  The "files.extend-exclude" key comes from
+                  https://github.com/crate-ci/typos/blob/master/docs/reference.md
+                  */
+                  (toml.files or { }).extend-exclude or [ ]
+              )
+            else
+              [ ];
+        in
         {
           name = "typos";
           description = "Source code spell checker";
@@ -3412,10 +3465,11 @@ lib.escapeShellArgs (lib.concatMap (ext: [ "--ghc-opt" "-X${ext}" ]) hooks.ormol
                   (with hooks.typos.settings; [
                     [ binary "--binary" ]
                     [ (color != "auto") "--color ${color}" ]
-                    [ (configuration != "") "--config ${configFile}" ]
-                    [ (configPath != "" && configuration == "") "--config ${configPath}" ]
+                    # Config file always exists (we generate one if not).
+                    [ true "--config ${pathToConfigFile}" ]
                     [ diff "--diff" ]
-                    [ (exclude != "") "--exclude ${exclude} --force-exclude" ]
+                    [ (exclude != "") "--exclude ${exclude}" ]
+                    [ (force-exclude) "--force-exclude" ]
                     [ (format != "long") "--format ${format}" ]
                     [ hidden "--hidden" ]
                     [ (locale != "en") "--locale ${locale}" ]
@@ -3429,6 +3483,7 @@ lib.escapeShellArgs (lib.concatMap (ext: [ "--ghc-opt" "-X${ext}" ]) hooks.ormol
             in
             "${hooks.typos.package}/bin/typos ${cmdArgs}";
           types = [ "text" ];
+          excludes = excludesFromConfig;
         };
       typstfmt = {
         name = "typstfmt";
