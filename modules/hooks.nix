@@ -3365,8 +3365,8 @@ lib.escapeShellArgs (lib.concatMap (ext: [ "--ghc-opt" "-X${ext}" ]) hooks.ormol
         {
           name = "terraform-format";
           description = "Format terraform (`.tf`) files.";
-          package = tools.terraform-fmt;
-          entry = "${hooks.terraform-format.package}/bin/terraform-fmt";
+          package = tools.opentofu;
+          entry = "${hooks.terraform-format.package}/bin/tofu fmt";
           files = "\\.tf$";
         };
       tflint =

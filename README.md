@@ -298,7 +298,7 @@ clang-format supports.
 
 ### Terraform
 
-- `terraform-format`: built-in formatter (using [OpenTofu](https://opentofu.org/)'s [`fmt`](https://opentofu.org/docs/cli/commands/fmt/))
+- [tofu fmt](https://opentofu.org/docs/cli/commands/fmt/)
 - [tflint](https://github.com/terraform-linters/tflint)
 
 ### YAML
