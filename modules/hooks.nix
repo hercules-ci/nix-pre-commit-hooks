@@ -2,7 +2,7 @@
 let
   inherit (config) hooks tools settings;
   cfg = config;
-  inherit (lib) flatten mapAttrs mapAttrsToList mkDefault mkOption mkRemovedOptionModule mkRenamedOptionModule types;
+  inherit (lib) flatten mapAttrs mapAttrsToList mkDefault mkEnableOption mkOption mkRemovedOptionModule mkRenamedOptionModule types;
 
   cargoManifestPathArg =
     lib.optionalString
@@ -631,12 +631,17 @@ in
         type = types.submodule {
           imports = [ hookModule ];
           options.settings = {
-            flags =
-              mkOption {
-                type = types.str;
-                description = "Flags passed to latexindent. See available flags [here](https://latexindentpl.readthedocs.io/en/latest/sec-how-to-use.html#from-the-command-line)";
-                default = "--local --silent --overwriteIfDifferent";
-              };
+            extraConfig = mkOption {
+              type = types.attrs;
+              description = "[latexindent command-line options](https://latexindentpl.readthedocs.io/en/latest/sec-how-to-use.html#from-the-command-line) converted through `lib.cli.toGNUCommandLine`.";
+              default = { };
+
+              example = lib.literalExpression ''
+                {
+                  yaml = "defaultIndent: '    '";
+                }
+              '';
+            };
           };
         };
       };
@@ -2768,7 +2773,17 @@ lib.escapeShellArgs (lib.concatMap (ext: [ "--ghc-opt" "-X${ext}" ]) hooks.ormol
           description = "Perl script to add indentation to LaTeX files.";
           types = [ "file" "tex" ];
           package = tools.latexindent;
-          entry = "${hooks.latexindent.package}/bin/latexindent ${hooks.latexindent.settings.flags}";
+
+          entry = "${hooks.latexindent.package}/bin/latexindent ${
+            lib.cli.toGNUCommandLineShell {} (
+              {
+                local = true;
+                overwriteIfDifferent = true;
+                silent = true;
+              }
+              // hooks.latexindent.settings.extraConfig
+            )
+          }";
         };
       lacheck =
         let
