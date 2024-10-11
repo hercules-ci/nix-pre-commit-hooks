@@ -631,6 +631,13 @@ in
         type = types.submodule {
           imports = [ hookModule ];
           options.settings = {
+            disableExtraFiles =
+              mkEnableOption
+                (throw "initial description should never be evaluated")
+              // {
+                description = "Whether to disable the creation of backup and log files.";
+              };
+
             extraConfig = mkOption {
               type = types.attrs;
               description = "[latexindent command-line options](https://latexindentpl.readthedocs.io/en/latest/sec-how-to-use.html#from-the-command-line) converted through `lib.cli.toGNUCommandLine`.";
@@ -2768,22 +2775,46 @@ lib.escapeShellArgs (lib.concatMap (ext: [ "--ghc-opt" "-X${ext}" ]) hooks.ormol
           '';
         };
       latexindent =
+        let
+          hook = hooks.latexindent;
+        in
         {
           name = "latexindent";
           description = "Perl script to add indentation to LaTeX files.";
           types = [ "file" "tex" ];
           package = tools.latexindent;
 
-          entry = "${hooks.latexindent.package}/bin/latexindent ${
-            lib.cli.toGNUCommandLineShell {} (
-              {
-                local = true;
-                overwriteIfDifferent = true;
-                silent = true;
-              }
-              // hooks.latexindent.settings.extraConfig
-            )
-          }";
+          entry = lib.getExe (
+            pkgs.writeShellApplication {
+              name = "git-hooks-nix-hooks-latexindent-entry";
+
+              text = ''
+                ${hook.package}/bin/latexindent ${
+                  lib.optionalString
+                  hook.settings.disableExtraFiles
+                  ''--cruft "$(mktemp --directory)"''
+                } ${
+                  lib.cli.toGNUCommandLineShell {} (
+                    lib.mergeAttrsList [
+                      {
+                        local = true;
+                        silent = true;
+                      }
+
+                      (
+                        lib.optionalAttrs hook.settings.disableExtraFiles {
+                          logfile = toString /dev/null;
+                          overwriteIfDifferent = true;
+                        }
+                      )
+
+                      hook.settings.extraConfig
+                    ]
+                  )
+                } "$@"
+              '';
+            }
+          );
         };
       lacheck =
         let
