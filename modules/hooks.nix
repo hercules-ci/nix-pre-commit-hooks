@@ -34,7 +34,7 @@ let
               [ "chktex" "lacheck" "latexindent" ]
           )
       )
-    // { inherit (pkgs.texlive) scheme-basic; }
+    // { inherit (pkgs.texlive) scheme-minimal; }
   );
 in
 {
