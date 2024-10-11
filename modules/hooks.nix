@@ -2,7 +2,7 @@
 let
   inherit (config) hooks tools settings;
   cfg = config;
-  inherit (lib) flatten mapAttrs mapAttrsToList mkDefault mkEnableOption mkOption mkRemovedOptionModule mkRenamedOptionModule types;
+  inherit (lib) flatten mapAttrs mapAttrsToList mkDefault mkOption mkRemovedOptionModule mkRenamedOptionModule types;
 
   cargoManifestPathArg =
     lib.optionalString
@@ -631,12 +631,12 @@ in
         type = types.submodule {
           imports = [ hookModule ];
           options.settings = {
-            disableExtraFiles =
-              mkEnableOption
-                (throw "initial description should never be evaluated")
-              // {
-                description = "Whether to disable the creation of backup and log files.";
-              };
+            disableExtraFiles = mkOption {
+              default = true;
+              example = false;
+              description = "Whether to disable the creation of backup and log files.";
+              type = types.bool;
+            };
 
             extraConfig = mkOption {
               type = types.attrs;
