@@ -44,6 +44,7 @@
 , mdl
 , mdsh
 , nil
+, nix
 , nixfmt
 , nixfmt-classic ? null
 , nixfmt-rfc-style ? null
@@ -134,6 +135,7 @@ in
     mdl
     mdsh
     nil
+    nix
     nixpkgs-fmt
     ormolu
     pre-commit-hook-ensure-sops

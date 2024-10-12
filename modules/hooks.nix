@@ -2986,6 +2986,13 @@ lib.escapeShellArgs (lib.concatMap (ext: [ "--ghc-opt" "-X${ext}" ]) hooks.ormol
             builtins.toString script;
           files = "\\.nix$";
         };
+      nix-fmt =
+        {
+          name = "nix-fmt";
+          description = "Format Nix files using the formatter specified in your flake.";
+          package = tools.nix;
+          entry = "${hooks.nix-fmt.package}/bin/nix fmt";
+        };
       # nixfmt was renamed to nixfmt-classic.
       # The hook has been deprecated to free up the name for when the new RFC-style nixfmt becomes stable.
       nixfmt = nixfmt-classic;
