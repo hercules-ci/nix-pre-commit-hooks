@@ -1,5 +1,5 @@
 # Test that checks whether the correct hooks are created in the hooks folder.
-{ git, perl, coreutils, runCommand, run, lib, mktemp }:
+{ git, perl, coreutils, runCommand, run, lib, mktemp, writeShellApplication }:
 let
   tests = {
     basic-test = {
@@ -65,35 +65,42 @@ let
       in ''
         rm -f ~/.git/hooks/*
         ${runDerivation.shellHook}
-        actualHooks=(`find ~/.git/hooks -type f -printf "%f "`)
-        read -a expectedHooks <<< "${builtins.toString test.expectedHooks}"
+        read -r -a actualHooks <<< "$(find ~/.git/hooks -type f -printf "%f ")"
+        expectedHooks=(${builtins.toString test.expectedHooks})
         if ! assertArraysEqual actualHooks expectedHooks; then
-          echo "${name} failed: Expected hooks '${builtins.toString test.expectedHooks}' but found '$actualHooks'."
+          echo "${name} failed: Expected hooks \"''${expectedHooks[*]}\" but found \"''${actualHooks[*]}\"."
           return 1
         fi
       '')
     tests;
+
+  testScript = writeShellApplication {
+    name = "installation-test";
+    runtimeInputs = [ git perl coreutils mktemp ];
+    bashOptions = [ "errexit" "nounset" "xtrace" ];
+    text = ''
+      HOME=$(mktemp -d)
+      cd "$HOME"
+      git init
+
+      assertArraysEqual() {
+        local -n _array_one=$1
+        local -n _array_two=$2
+        read -r -a diffArray <<< "$( echo "''${_array_one[*]} ''${_array_two[*]}" | tr ' ' '\n' | sort | uniq -u )"
+        if [ ''${#diffArray[@]} -eq 0 ]
+        then
+          return 0
+        else
+          return 1
+        fi
+      }
+
+      ${lib.concatStrings executeTest}
+    '';
+  };
 in
-runCommand "installation-test" { nativeBuildInputs = [ git perl coreutils mktemp ]; } ''
-  set -eoux
-
-  HOME=$(mktemp -d)
-  cd $HOME
-  git init
-
-  assertArraysEqual() {
-    local -n _array_one=$1
-    local -n _array_two=$2
-    diffArray=(`echo ''${_array_one[@]} ''${_array_two[@]} | tr ' ' '\n' | sort | uniq -u`)
-    if [ ''${#diffArray[@]} -eq 0 ]
-    then
-      return 0
-    else
-      return 1
-    fi
-  }
-
-  ${lib.concatStrings executeTest}
+runCommand "run-installation-test" { } ''
+  ${lib.getExe testScript}
 
   echo "success" > $out
 ''
