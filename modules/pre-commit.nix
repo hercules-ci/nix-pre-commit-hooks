@@ -95,6 +95,10 @@ let
       buildPhase = ''
         set +e
         HOME=$PWD
+        # It is important to use a separate git directory than $HOME,
+        # so pre-commit artifacts won't pollute it
+        mkdir src
+        cd src
         ln -fs ${configFile} .pre-commit-config.yaml
         git init -q
         git add .
