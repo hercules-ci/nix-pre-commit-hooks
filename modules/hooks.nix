@@ -603,6 +603,20 @@ in
           };
         };
       };
+      goimports = mkOption {
+        description = "goimports hook";
+        type = types.submodule {
+          imports = [ hookModule ];
+          options.settings = {
+            flags = mkOption {
+              type = types.str;
+              description = "Flags passed to goimports.";
+              default = "";
+              example = "-local github.com/example/repo -w .";
+            };
+          };
+        };
+      };
       golines = mkOption {
         description = "golines hook";
         type = types.submodule {
@@ -2654,6 +2668,31 @@ lib.escapeShellArgs (lib.concatMap (ext: [ "--ghc-opt" "-X${ext}" ]) hooks.ormol
                 for file in "$@"; do
                     # redirect stderr so that violations and summaries are properly interleaved.
                     if ! ${hooks.gofmt.package}/bin/gofmt -l -w "$file" 2>&1
+                    then
+                        failed=true
+                    fi
+                done
+                if [[ $failed == "true" ]]; then
+                    exit 1
+                fi
+              '';
+            in
+            builtins.toString script;
+          files = "\\.go$";
+        };
+      goimports =
+        {
+          name = "goimports";
+          description = "Go import lines, adding missing ones and removing unreferenced ones.";
+          package = tools.gotools;
+          entry =
+            let
+              script = pkgs.writeShellScript "precommit-goimports" ''
+                set -e
+                failed=false
+                for file in "$@"; do
+                    # redirect stderr so that violations and summaries are properly interleaved.
+                    if ! ${hooks.gotools.package}/bin/goimports ${hooks.goimports.settings.flags} -w "$file" 2>&1
                     then
                         failed=true
                     fi
