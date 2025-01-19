@@ -363,6 +363,12 @@ in
           display a warning message when a renamed option is used.
         '';
       };
+
+      configFile = lib.mkOption {
+        type = types.str;
+        default = ".pre-commit-config.yaml";
+        description = ''The name of the config file.'';
+      };
     };
 
   config =
@@ -398,22 +404,22 @@ in
             # filesystem churn. This improves performance with watch tools like lorri
             # and prevents installation loops by lorri.
 
-            if ! readlink "''${GIT_WC}/.pre-commit-config.yaml" >/dev/null \
-              || [[ $(readlink "''${GIT_WC}/.pre-commit-config.yaml") != ${configFile} ]]; then
+            if ! readlink "''${GIT_WC}/${cfg.configFile}" >/dev/null \
+              || [[ $(readlink "''${GIT_WC}/${cfg.configFile}") != ${configFile} ]]; then
               echo 1>&2 "git-hooks.nix: updating $PWD repo"
-              [ -L .pre-commit-config.yaml ] && unlink .pre-commit-config.yaml
+              [ -L ${cfg.configFile} ] && unlink ${cfg.configFile}
 
-              if [ -e "''${GIT_WC}/.pre-commit-config.yaml" ]; then
-                echo 1>&2 "git-hooks.nix: WARNING: Refusing to install because of pre-existing .pre-commit-config.yaml"
-                echo 1>&2 "    1. Translate .pre-commit-config.yaml contents to the new syntax in your Nix file"
+              if [ -e "''${GIT_WC}/${cfg.configFile}" ]; then
+                echo 1>&2 "git-hooks.nix: WARNING: Refusing to install because of pre-existing ${cfg.configFile}"
+                echo 1>&2 "    1. Translate ${cfg.configFile} contents to the new syntax in your Nix file"
                 echo 1>&2 "        see https://github.com/cachix/git-hooks.nix#getting-started"
-                echo 1>&2 "    2. remove .pre-commit-config.yaml"
-                echo 1>&2 "    3. add .pre-commit-config.yaml to .gitignore"
+                echo 1>&2 "    2. remove ${cfg.configFile}"
+                echo 1>&2 "    3. add ${cfg.configFile} to .gitignore"
               else
                 if ${boolToString cfg.addGcRoot}; then
-                  nix-store --add-root "''${GIT_WC}/.pre-commit-config.yaml" --indirect --realise ${configFile}
+                  nix-store --add-root "''${GIT_WC}/${cfg.configFile}" --indirect --realise ${configFile}
                 else
-                  ln -fs ${configFile} "''${GIT_WC}/.pre-commit-config.yaml"
+                  ln -fs ${configFile} "''${GIT_WC}/${cfg.configFile}"
                 fi
                 # Remove any previously installed hooks (since pre-commit itself has no convergent design)
                 hooks="${concatStringsSep " " (remove "manual" supportedHooksLib.supportedHooks )}"
@@ -430,10 +436,10 @@ in
                       # if you amend these switches please also review $hooks above
                       commit | merge-commit | push)
                         stage="pre-"$stage
-                        pre-commit install -t $stage
+                        pre-commit install -c ${cfg.configFile} -t $stage
                         ;;
                       ${concatStringsSep "|" supportedHooksLib.supportedHooks})
-                        pre-commit install -t $stage
+                        pre-commit install -c ${cfg.configFile} -t $stage
                         ;;
                       *)
                         echo 1>&2 "ERROR: git-hooks.nix: either $stage is not a valid stage or git-hooks.nix doesn't yet support it."
@@ -443,7 +449,7 @@ in
                   done
                 # ... or default 'pre-commit' hook
                 else
-                  pre-commit install
+                  pre-commit install -c ${cfg.configFile}
                 fi
 
                 # Fetch the absolute path to the git common directory. This will normally point to $GIT_WC/.git.
