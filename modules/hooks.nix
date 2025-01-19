@@ -3688,9 +3688,9 @@ lib.escapeShellArgs (lib.concatMap (ext: [ "--ghc-opt" "-X${ext}" ]) hooks.ormol
       terraform-format =
         {
           name = "terraform-format";
-          description = "Format terraform (`.tf`) files.";
-          package = tools.terraform-fmt;
-          entry = "${hooks.terraform-format.package}/bin/terraform-fmt";
+          description = "Format Terraform (`.tf`) files.";
+          package = tools.opentofu;
+          entry = "${lib.getExe hooks.terraform-format.package} fmt -check -diff";
           files = "\\.tf$";
         };
       terraform-validate =
