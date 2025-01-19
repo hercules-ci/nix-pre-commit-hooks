@@ -8,6 +8,6 @@ set -x
     | sort \
     | uniq \
     | while read dir; do
-        ${opentofu}/bin/tofu validate "$dir"
+        ${opentofu}/bin/tofu -chdir="$dir" validate
       done
 ''

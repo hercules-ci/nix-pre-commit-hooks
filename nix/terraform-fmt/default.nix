@@ -7,6 +7,6 @@ writeScriptBin "terraform-fmt" ''#!/usr/bin/env bash
     | sort \
     | uniq \
     | while read dir; do
-        ${opentofu}/bin/tofu fmt "$dir"
+        ${opentofu}/bin/tofu -chdir="$dir" fmt
       done
 ''
