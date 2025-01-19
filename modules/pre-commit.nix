@@ -2,12 +2,13 @@
 let
   inherit (lib)
     boolToString
+    concatMapStrings
     concatStringsSep
-    compare
     filterAttrs
     literalExample
     mapAttrsToList
     mkOption
+    optionalString
     types
     remove
     ;
@@ -92,28 +93,26 @@ let
       nativeBuildInputs = enabledExtraPackages
         ++ lib.optional (config.settings.rust.check.cargoDeps != null) cargoSetupHook;
       cargoDeps = config.settings.rust.check.cargoDeps;
-      buildPhase = ''
-        set +e
-        HOME=$PWD
-        ln -fs ${configFile} .pre-commit-config.yaml
-        git init -q
-        git add .
-        git config --global user.email "you@example.com"
-        git config --global user.name "Your Name"
-        git commit -m "init" -q
-        if [[ ${toString (compare install_stages [ "manual" ])} -eq 0 ]]
-        then
-          echo "Running: $ pre-commit run --hook-stage manual --all-files"
-          ${cfg.package}/bin/pre-commit run --hook-stage manual --all-files
-        else
-          echo "Running: $ pre-commit run --all-files"
-          ${cfg.package}/bin/pre-commit run --all-files
-        fi
-        exitcode=$?
-        git --no-pager diff --color
-        mkdir $out
-        [ $? -eq 0 ] && exit $exitcode
-      '';
+      buildPhase =
+        let
+          cmd = "pre-commit run${optionalString (install_stages == [ "manual" ]) " --hook-stage manual"} --all-files";
+        in
+        ''
+          set +e
+          HOME=$PWD
+          ln -fs ${configFile} .pre-commit-config.yaml
+          git init -q
+          git add .
+          git config --global user.email "you@example.com"
+          git config --global user.name "Your Name"
+          git commit -m "init" -q
+          echo "Running: $ ${cmd}"
+          ${cfg.package}/bin/${cmd}
+          exitcode=$?
+          git --no-pager diff --color
+          mkdir $out
+          [ $? -eq 0 ] && exit $exitcode
+        '';
     };
 
   failedAssertions = builtins.map (x: x.message) (builtins.filter (x: !x.assertion) config.assertions);
@@ -391,7 +390,7 @@ in
           elif ! ${cfg.gitPackage}/bin/git rev-parse --git-dir &> /dev/null; then
             echo 1>&2 "WARNING: git-hooks.nix: .git not found; skipping installation."
           else
-            GIT_WC=`${cfg.gitPackage}/bin/git rev-parse --show-toplevel`
+            GIT_WC=$(${cfg.gitPackage}/bin/git rev-parse --show-toplevel)
 
             # These update procedures compare before they write, to avoid
             # filesystem churn. This improves performance with watch tools like lorri
@@ -415,41 +414,16 @@ in
                   ln -fs ${configFile} "''${GIT_WC}/.pre-commit-config.yaml"
                 fi
                 # Remove any previously installed hooks (since pre-commit itself has no convergent design)
-                hooks="${concatStringsSep " " (remove "manual" supportedHooksLib.supportedHooks )}"
-                for hook in $hooks; do
-                  pre-commit uninstall -t $hook
-                done
+                pre-commit uninstall${concatMapStrings (hook: " --hook-type ${hook}") (remove "manual" supportedHooksLib.supportedHooks)}
                 ${cfg.gitPackage}/bin/git config --local core.hooksPath ""
-                # Add hooks for configured stages (only) ...
-                if [ ! -z "${concatStringsSep " " install_stages}" ]; then
-                  for stage in ${concatStringsSep " " install_stages}; do
-                    case $stage in
-                      manual)
-                        ;;
-                      # if you amend these switches please also review $hooks above
-                      commit | merge-commit | push)
-                        stage="pre-"$stage
-                        pre-commit install -t $stage
-                        ;;
-                      ${concatStringsSep "|" supportedHooksLib.supportedHooks})
-                        pre-commit install -t $stage
-                        ;;
-                      *)
-                        echo 1>&2 "ERROR: git-hooks.nix: either $stage is not a valid stage or git-hooks.nix doesn't yet support it."
-                        exit 1
-                        ;;
-                    esac
-                  done
-                # ... or default 'pre-commit' hook
-                else
-                  pre-commit install
-                fi
+                # Add hooks for configured stages
+                pre-commit install${concatMapStrings (stage: " --hook-type ${if builtins.elem stage [ "commit" "merge-commit" "push" ] then "pre-${stage}" else stage}") (remove "manual" install_stages)}
 
                 # Fetch the absolute path to the git common directory. This will normally point to $GIT_WC/.git.
                 common_dir=''$(${cfg.gitPackage}/bin/git rev-parse --path-format=absolute --git-common-dir)
 
                 # Convert the absolute path to a path relative to the toplevel working directory.
-                common_dir=''${common_dir#''$GIT_WC/}
+                common_dir=''${common_dir#"''$GIT_WC"/}
 
                 ${cfg.gitPackage}/bin/git config --local core.hooksPath "''$common_dir/hooks"
               fi
